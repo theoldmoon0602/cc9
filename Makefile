@@ -1,6 +1,7 @@
 cc9: cc9.c
 
 test: cc9
+	./cc9 -test
 	./test.sh
 
 clean:
