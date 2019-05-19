@@ -6,6 +6,10 @@
 
 enum {
   TK_NUM = 256,
+  TK_EQ,
+  TK_NE,
+  TK_LE,
+  TK_GE,
   TK_EOF,
 };
 
@@ -17,6 +21,9 @@ typedef struct {
 
 enum {
   ND_NUM = 256,
+  ND_EQ,
+  ND_NE,
+  ND_LE,
 };
 
 typedef struct Node {
@@ -80,6 +87,49 @@ void tokenize() {
       continue;
     }
 
+    if (*p == '=' && *(p + 1) == '=') {
+      tokens[i].ty = TK_EQ;
+      tokens[i].input = p;
+      i++;
+      p += 2;
+      continue;
+    }
+    if (*p == '!' && *(p + 1) == '=') {
+      tokens[i].ty = TK_NE;
+      tokens[i].input = p;
+      i++;
+      p += 2;
+      continue;
+    }
+    if (*p == '>') {
+      if (*(p + 1) == '=') {
+        tokens[i].ty = TK_GE;
+        tokens[i].input = p;
+        i++;
+        p += 2;
+      } else {
+        tokens[i].ty = '>';
+        tokens[i].input = p;
+        i++;
+        p++;
+      }
+      continue;
+    }
+    if (*p == '<') {
+      if (*(p + 1) == '=') {
+        tokens[i].ty = TK_LE;
+        tokens[i].input = p;
+        i++;
+        p += 2;
+      } else {
+        tokens[i].ty = '<';
+        tokens[i].input = p;
+        i++;
+        p++;
+      }
+      continue;
+    }
+
     if (isdigit(*p)) {
       tokens[i].ty = TK_NUM;
       tokens[i].input = p;
@@ -140,15 +190,36 @@ Node *parse_term() {
   return node;
 }
 
-Node *expr() {
+Node *parse_factor() {
   Node *node = parse_term();
   if (consume('+')) {
-    node = new_node('+', node, expr());
+    node = new_node('+', node, parse_factor());
   } else if (consume('-')) {
-    node = new_node('-', node, expr());
+    node = new_node('-', node, parse_factor());
   }
   return node;
 }
+
+Node *parse_cmp() {
+  Node *node = parse_factor();
+  if (consume('>')) {
+    node = new_node('<', parse_cmp(), node);
+  } else if (consume('<')) {
+    node = new_node('<', node, parse_cmp());
+  } else if (consume(TK_LE)) {
+    node = new_node(ND_LE, node, parse_cmp());
+  } else if (consume(TK_GE)) {
+    node = new_node(ND_LE, parse_cmp(), node);
+  } else if (consume(TK_EQ)) {
+    node = new_node(TK_EQ, node, parse_cmp());
+  } else if (consume(TK_NE)) {
+    node = new_node(TK_NE, node, parse_cmp());
+  }
+
+  return node;
+}
+
+Node *expr() { return parse_cmp(); }
 
 void gen(Node *node) {
   if (node->ty == ND_NUM) {
@@ -173,6 +244,26 @@ void gen(Node *node) {
   case '/':
     printf("  cqo\n");
     printf("  idiv rdi\n");
+    break;
+  case ND_EQ:
+    printf("  cmp rax, rdi\n");
+    printf("  sete al\n");
+    printf("  movzb rax, al\n");
+    break;
+  case ND_NE:
+    printf("  cmp rax, rdi\n");
+    printf("  setne al\n");
+    printf("  movzb rax, al\n");
+    break;
+  case ND_LE:
+    printf("  cmp rax, rdi\n");
+    printf("  setle al\n");
+    printf("  movzb rax, al\n");
+    break;
+  case '<':
+    printf("  cmp rax, rdi\n");
+    printf("  setl al\n");
+    printf("  movzb rax, al\n");
     break;
   }
   printf("  push rax\n");
