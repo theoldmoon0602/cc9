@@ -40,8 +40,23 @@ typedef struct {
 } Vector;
 
 char *user_input;
-Token tokens[100];
+Vector *tokens;
 int pos;
+
+Token *new_token(int ty, char *input) {
+  Token *token = malloc(sizeof(Token));
+  token->ty = ty;
+  token->input = input;
+  return token;
+}
+Token *new_num_token(int val, char *input) {
+  Token *token = malloc(sizeof(Token));
+  token->ty = TK_NUM;
+  token->val = val;
+  token->input = input;
+  return token;
+}
+Token *get_token(int pos) { return (Token *)tokens->data[pos]; }
 
 Node *new_node(int ty, Node *lhs, Node *rhs) {
   Node *node = malloc(sizeof(Node));
@@ -100,7 +115,6 @@ void error_at(char *loc, char *msg) {
 void tokenize() {
   char *p = user_input;
 
-  int i = 0;
   while (*p) {
     if (isspace(*p)) {
       p++;
@@ -109,72 +123,57 @@ void tokenize() {
 
     if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' ||
         *p == ')') {
-      tokens[i].ty = *p;
-      tokens[i].input = p;
-      i++;
+
+      vec_push(tokens, (void *)new_token(*p, p));
       p++;
       continue;
     }
 
     if (*p == '=' && *(p + 1) == '=') {
-      tokens[i].ty = TK_EQ;
-      tokens[i].input = p;
-      i++;
+      vec_push(tokens, (void *)new_token(TK_EQ, p));
       p += 2;
       continue;
     }
     if (*p == '!' && *(p + 1) == '=') {
-      tokens[i].ty = TK_NE;
-      tokens[i].input = p;
-      i++;
+      vec_push(tokens, (void *)new_token(TK_NE, p));
       p += 2;
       continue;
     }
     if (*p == '>') {
       if (*(p + 1) == '=') {
-        tokens[i].ty = TK_GE;
-        tokens[i].input = p;
-        i++;
+        vec_push(tokens, (void *)new_token(TK_GE, p));
         p += 2;
       } else {
-        tokens[i].ty = '>';
-        tokens[i].input = p;
-        i++;
+        vec_push(tokens, (void *)new_token('>', p));
         p++;
       }
       continue;
     }
     if (*p == '<') {
       if (*(p + 1) == '=') {
-        tokens[i].ty = TK_LE;
-        tokens[i].input = p;
-        i++;
+        vec_push(tokens, (void *)new_token(TK_LE, p));
         p += 2;
       } else {
-        tokens[i].ty = '<';
-        tokens[i].input = p;
-        i++;
+        vec_push(tokens, (void *)new_token('<', p));
         p++;
       }
       continue;
     }
 
     if (isdigit(*p)) {
-      tokens[i].ty = TK_NUM;
-      tokens[i].input = p;
-      tokens[i].val = strtol(p, &p, 10);
-      i++;
+      char *cur_p = p;
+      int val = strtol(p, &p, 10);
+      vec_push(tokens, (void *)new_num_token(val, cur_p));
       continue;
     }
 
     error_at(p, "Failed to tokenize");
   }
-  tokens[i].ty = TK_EOF;
-  tokens[i].input = p;
+  vec_push(tokens, (void *)new_token(TK_EOF, p));
 }
 
 int consume(int ty) {
-  if (tokens[pos].ty == ty) {
+  if (get_token(pos)->ty == ty) {
     pos++;
     return 1;
   }
@@ -187,16 +186,16 @@ Node *parse_num() {
   if (consume('(')) {
     Node *node = expr();
     if (!consume(')')) {
-      error_at(tokens[pos].input, "')' is expected");
+      error_at(get_token(pos)->input, "')' is expected");
     }
     return node;
   }
-  if (tokens[pos].ty == TK_NUM) {
-    Node *node = new_num_node(tokens[pos].val);
+  if (get_token(pos)->ty == TK_NUM) {
+    Node *node = new_num_node(get_token(pos)->val);
     pos++;
     return node;
   }
-  error_at(tokens[pos].input, "number is expected");
+  error_at(get_token(pos)->input, "number is expected");
 }
 
 Node *unary() {
@@ -324,6 +323,7 @@ int main(int argc, char **argv) {
   }
 
   user_input = argv[1];
+  tokens = new_vector();
   tokenize();
 
   pos = 0;
