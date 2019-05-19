@@ -71,7 +71,7 @@ void tokenize() {
       continue;
     }
 
-    if (*p == '+' || *p == '-') {
+    if (*p == '+' || *p == '-' || *p == '*' || *p == '/') {
       tokens[i].ty = *p;
       tokens[i].input = p;
       i++;
@@ -92,6 +92,15 @@ void tokenize() {
   tokens[i].ty = TK_EOF;
   tokens[i].input = p;
 }
+
+int consume(int ty) {
+  if (tokens[pos].ty == ty) {
+    pos++;
+    return 1;
+  }
+  return 0;
+}
+
 Node *parse_num() {
   if (tokens[pos].ty == TK_NUM) {
     Node *node = new_num_node(tokens[pos].val);
@@ -101,13 +110,21 @@ Node *parse_num() {
   error_at(tokens[pos].input, "number is expected");
 }
 
-Node *expr() {
+Node *parse_term() {
   Node *node = parse_num();
-  if (tokens[pos].ty == '+') {
-    pos++;
+  if (consume('*')) {
+    node = new_node('*', node, parse_term());
+  } else if (consume('/')) {
+    node = new_node('/', node, parse_term());
+  }
+  return node;
+}
+
+Node *expr() {
+  Node *node = parse_term();
+  if (consume('+')) {
     node = new_node('+', node, expr());
-  } else if (tokens[pos].ty == '-') {
-    pos++;
+  } else if (consume('-')) {
     node = new_node('-', node, expr());
   }
   return node;
@@ -120,21 +137,25 @@ void gen(Node *node) {
   }
   gen(node->lhs);
   gen(node->rhs);
-  if (node->ty == '+') {
-    printf("  pop rdi\n");
-    printf("  pop rax\n");
-    printf("  add rax, rdi\n");
-    printf("  push rax\n");
-    return;
-  } else if (node->ty == '-') {
-    printf("  pop rdi\n");
-    printf("  pop rax\n");
-    printf("  sub rax, rdi\n");
-    printf("  push rax\n");
-    return;
-  }
 
-  error("unknown node type: %d", node->ty);
+  printf("  pop rdi\n");
+  printf("  pop rax\n");
+  switch (node->ty) {
+  case '+':
+    printf("  add rax, rdi\n");
+    break;
+  case '-':
+    printf("  sub rax, rdi\n");
+    break;
+  case '*':
+    printf("  imul rdi\n");
+    break;
+  case '/':
+    printf("  cqo\n");
+    printf("  idiv rdi\n");
+    break;
+  }
+  printf("  push rax\n");
 }
 
 int main(int argc, char **argv) {
