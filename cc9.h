@@ -2,6 +2,7 @@
 #define CC9_INCLUDE_GUARD
 enum {
   TK_NUM = 256,
+  TK_IDENT,
   TK_EQ,
   TK_NE,
   TK_LE,
@@ -17,6 +18,7 @@ typedef struct {
 
 enum {
   ND_NUM = 256,
+  ND_IDENT,
   ND_EQ,
   ND_NE,
   ND_LE,
@@ -27,6 +29,7 @@ typedef struct Node {
   struct Node *lhs;
   struct Node *rhs;
   int val;
+  char name;
 } Node;
 
 typedef struct {
@@ -38,11 +41,13 @@ typedef struct {
 extern char *user_input;
 extern Vector *tokens;
 extern int pos;
+extern Node *code[100];
 
 Vector *new_vector();
 void vec_push(Vector *vec, void *elem);
 void tokenize();
-Node *expr();
+Node *parse_expr();
+void parse_program();
 void error(char *fmt, ...);
 void error_at(char *loc, char *msg);
 void gen(Node *node);

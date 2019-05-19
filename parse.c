@@ -5,6 +5,7 @@
 char *user_input;
 Vector *tokens;
 int pos;
+Node *code[100];
 
 Token *new_token(int ty, char *input) {
   Token *token = malloc(sizeof(Token));
@@ -34,6 +35,13 @@ Node *new_num_node(int val) {
   return node;
 }
 
+Node *new_ident_node(char name) {
+  Node *node = malloc(sizeof(Node));
+  node->ty = ND_IDENT;
+  node->name = name;
+  return node;
+}
+
 void tokenize() {
   char *p = user_input;
 
@@ -44,16 +52,25 @@ void tokenize() {
     }
 
     if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' ||
-        *p == ')') {
+        *p == ')' || *p == ';') {
 
       vec_push(tokens, (void *)new_token(*p, p));
       p++;
       continue;
     }
-
-    if (*p == '=' && *(p + 1) == '=') {
-      vec_push(tokens, (void *)new_token(TK_EQ, p));
-      p += 2;
+    if ('a' <= *p && *p <= 'z') {
+      vec_push(tokens, (void *)new_token(TK_IDENT, p));
+      p++;
+      continue;
+    }
+    if (*p == '=') {
+      if (*(p + 1) == '=') {
+        vec_push(tokens, (void *)new_token(TK_EQ, p));
+        p += 2;
+      } else {
+        vec_push(tokens, (void *)new_token('=', p));
+        p++;
+      }
       continue;
     }
     if (*p == '!' && *(p + 1) == '=') {
@@ -106,10 +123,15 @@ int consume(int ty) {
 
 Node *parse_num() {
   if (consume('(')) {
-    Node *node = expr();
+    Node *node = parse_expr();
     if (!consume(')')) {
       error_at(get_token(pos)->input, "')' is expected");
     }
+    return node;
+  }
+  if (get_token(pos)->ty == TK_IDENT) {
+    Node *node = new_ident_node(*(get_token(pos)->input));
+    pos++;
     return node;
   }
   if (get_token(pos)->ty == TK_NUM) {
@@ -140,33 +162,63 @@ Node *parse_term() {
   return node;
 }
 
-Node *parse_factor() {
+Node *parse_addsub() {
   Node *node = parse_term();
   if (consume('+')) {
-    node = new_node('+', node, parse_factor());
+    node = new_node('+', node, parse_addsub());
   } else if (consume('-')) {
-    node = new_node('-', node, parse_factor());
+    node = new_node('-', node, parse_addsub());
   }
   return node;
 }
 
-Node *parse_cmp() {
-  Node *node = parse_factor();
+Node *parse_relational() {
+  Node *node = parse_addsub();
   if (consume('>')) {
-    node = new_node('<', parse_cmp(), node);
+    node = new_node('<', parse_relational(), node);
   } else if (consume('<')) {
-    node = new_node('<', node, parse_cmp());
+    node = new_node('<', node, parse_relational());
   } else if (consume(TK_LE)) {
-    node = new_node(ND_LE, node, parse_cmp());
+    node = new_node(ND_LE, node, parse_relational());
   } else if (consume(TK_GE)) {
-    node = new_node(ND_LE, parse_cmp(), node);
-  } else if (consume(TK_EQ)) {
-    node = new_node(TK_EQ, node, parse_cmp());
+    node = new_node(ND_LE, parse_relational(), node);
+  }
+  return node;
+}
+
+Node *parse_equality() {
+  Node *node = parse_relational();
+  if (consume(TK_EQ)) {
+    node = new_node(TK_EQ, node, parse_equality());
   } else if (consume(TK_NE)) {
-    node = new_node(TK_NE, node, parse_cmp());
+    node = new_node(TK_NE, node, parse_equality());
   }
 
   return node;
 }
 
-Node *expr() { return parse_cmp(); }
+Node *parse_assign() {
+  Node *node = parse_equality();
+  if (consume('=')) {
+    node = new_node('=', node, parse_assign());
+  }
+  return node;
+}
+
+Node *parse_expr() { return parse_assign(); }
+
+Node *parse_stmt() {
+  Node *node = parse_expr();
+  if (!consume(';')) {
+    error_at(get_token(pos)->input, "; is expected");
+  }
+  return node;
+}
+
+void parse_program() {
+  int i = 0;
+  while (get_token(pos)->ty != TK_EOF) {
+    code[i++] = parse_stmt();
+  }
+  code[i] = NULL;
+}
