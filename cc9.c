@@ -120,8 +120,18 @@ Node *parse_num() {
   error_at(tokens[pos].input, "number is expected");
 }
 
+Node *unary() {
+  if (consume('+')) {
+    return unary();
+  }
+  if (consume('-')) {
+    return new_node('-', new_num_node(0), unary());
+  }
+  return parse_num();
+}
+
 Node *parse_term() {
-  Node *node = parse_num();
+  Node *node = unary();
   if (consume('*')) {
     node = new_node('*', node, parse_term());
   } else if (consume('/')) {
