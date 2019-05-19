@@ -71,7 +71,8 @@ void tokenize() {
       continue;
     }
 
-    if (*p == '+' || *p == '-' || *p == '*' || *p == '/') {
+    if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' ||
+        *p == ')') {
       tokens[i].ty = *p;
       tokens[i].input = p;
       i++;
@@ -101,7 +102,16 @@ int consume(int ty) {
   return 0;
 }
 
+Node *expr();
+
 Node *parse_num() {
+  if (consume('(')) {
+    Node *node = expr();
+    if (!consume(')')) {
+      error_at(tokens[pos].input, "')' is expected");
+    }
+    return node;
+  }
   if (tokens[pos].ty == TK_NUM) {
     Node *node = new_num_node(tokens[pos].val);
     pos++;
