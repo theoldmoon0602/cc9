@@ -15,8 +15,35 @@ typedef struct {
   char *input;
 } Token;
 
+enum {
+  ND_NUM = 256,
+};
+
+typedef struct Node {
+  int ty;
+  struct Node *lhs;
+  struct Node *rhs;
+  int val;
+} Node;
+
 char *user_input;
 Token tokens[100];
+int pos;
+
+Node *new_node(int ty, Node *lhs, Node *rhs) {
+  Node *node = malloc(sizeof(Node));
+  node->ty = ty;
+  node->lhs = lhs;
+  node->rhs = rhs;
+  return node;
+}
+
+Node *new_num_node(int val) {
+  Node *node = malloc(sizeof(Node));
+  node->ty = ND_NUM;
+  node->val = val;
+  return node;
+}
 
 void error(char *fmt, ...) {
   va_list ap;
@@ -65,6 +92,50 @@ void tokenize() {
   tokens[i].ty = TK_EOF;
   tokens[i].input = p;
 }
+Node *parse_num() {
+  if (tokens[pos].ty == TK_NUM) {
+    Node *node = new_num_node(tokens[pos].val);
+    pos++;
+    return node;
+  }
+  error_at(tokens[pos].input, "number is expected");
+}
+
+Node *expr() {
+  Node *node = parse_num();
+  if (tokens[pos].ty == '+') {
+    pos++;
+    node = new_node('+', node, expr());
+  } else if (tokens[pos].ty == '-') {
+    pos++;
+    node = new_node('-', node, expr());
+  }
+  return node;
+}
+
+void gen(Node *node) {
+  if (node->ty == ND_NUM) {
+    printf("  push %d\n", node->val);
+    return;
+  }
+  gen(node->lhs);
+  gen(node->rhs);
+  if (node->ty == '+') {
+    printf("  pop rdi\n");
+    printf("  pop rax\n");
+    printf("  add rax, rdi\n");
+    printf("  push rax\n");
+    return;
+  } else if (node->ty == '-') {
+    printf("  pop rdi\n");
+    printf("  pop rax\n");
+    printf("  sub rax, rdi\n");
+    printf("  push rax\n");
+    return;
+  }
+
+  error("unknown node type: %d", node->ty);
+}
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -75,36 +146,15 @@ int main(int argc, char **argv) {
   user_input = argv[1];
   tokenize();
 
+  pos = 0;
+  Node *node = expr();
+
   printf(".intel_syntax noprefix\n");
   printf(".global main\n");
   printf("main:\n");
 
-  if (tokens[0].ty != TK_NUM) {
-    error_at(tokens[0].input, "the first token of expression must be a number");
-  }
-  printf("  mov rax, %d\n", tokens[0].val);
-  int i = 1;
-  while (tokens[i].ty != TK_EOF) {
-    if (tokens[i].ty == '+') {
-      i++;
-      if (tokens[i].ty != TK_NUM) {
-        error_at(tokens[i].input, "expected a number");
-      }
-      printf("  add rax, %d\n", tokens[i].val);
-      i++;
-      continue;
-    }
-    if (tokens[i].ty == '-') {
-      i++;
-      if (tokens[i].ty != TK_NUM) {
-        error_at(tokens[i].input, "expected a number");
-      }
-      printf("  sub rax, %d\n", tokens[i].val);
-      i++;
-      continue;
-    }
-    error_at(tokens[i].input, "unexpected token");
-  }
+  gen(node);
+  printf("  pop rax\n");
   printf("  ret\n");
 
   return 0;
